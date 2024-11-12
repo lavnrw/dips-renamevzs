@@ -1,0 +1,96 @@
+#!/usr/bin/python3
+
+import argparse
+from pathlib import Path
+import re
+import shutil
+import string
+import textwrap
+
+
+def rename(filepath, dest=None, move=False, width=3):
+    """Rename dipsExport file."""
+    (transaction, provenance) = get_info(filepath)
+    transaction_ = fmt_transaction(transaction, width)
+    provenance_ = fmt_provenance(provenance)
+    new_name = f"{transaction_}_{provenance_}.dips.xml"
+    old_path = Path(filepath)
+    new_path = Path(dest) / new_name if dest else old_path.with_name(new_name)
+    if move:
+        shutil.move(old_path, new_path)
+    else:
+        shutil.copy(old_path, new_path)
+
+
+regex_transaction = re.compile("<(?:[^:]+:)?transactionNumber>([^<]*)</")
+regex_provenance = re.compile("<(?:[^:]+:)?provenanceName>([^<]*)</")
+
+
+def get_info(filepath):
+    """Retrieve transaction number and provenance from dipsExport file."""
+    transaction = ""
+    provenance = ""
+    with open(filepath) as f:
+        for line in f:
+            if not transaction:
+                match_transaction = regex_transaction.search(line)
+                if match_transaction:
+                    transaction = match_transaction.group(1)
+            match_provenance = regex_provenance.search(line)
+            if match_provenance:
+                provenance = match_provenance.group(1)
+                break  # Reading the whole file is not necessary.
+    return (transaction, provenance)
+
+
+def fmt_transaction(transaction, width=3):
+    """Format dips-2023-12 as dips-2023-012."""
+    parts = transaction.split("-")
+    return f"{parts[0]}-{parts[1]}-{int(parts[2]):0{width}d}"
+
+
+def fmt_provenance(provenance):
+    """Make lowercase, replace spaces by underscores, remove funny chars."""
+    table = str.maketrans("", "", string.punctuation)
+    return (
+        provenance
+        .lower()
+        .replace("-", " ")  # hide "-" from translate
+        .translate(table)
+        .replace(" ", "_")
+    )
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="Copy dipsExport files, giving them nice names",
+        epilog=textwrap.dedent("""\
+            examples:
+
+            $ renamevzs c845750e-9296-11ee-8821-005056871b7c.xml
+            dips-2023-012_ministerium_für_zauberei.dips.xml
+
+            $ renamevzs -w 5 c845750e-9296-11ee-8821-005056871b7c.xml
+            dips-2023-00012_ministerium_für_zauberei.dips.xml
+            """))
+    parser.add_argument(
+        "files",
+        nargs="*",
+        help="dipsExport XML files")
+    parser.add_argument(
+        "-d", "--dest",
+        default=None,
+        help="destination directory (default: same as input file)")
+    parser.add_argument(
+        "-m", "--move",
+        action="store_true",
+        help="move, don't copy")
+    parser.add_argument(
+        "-w", "--width",
+        type=int,
+        default=3,
+        help="width of the last part of the transaction number (default: 3)")
+    args = parser.parse_args()
+    for f in args.files:
+        rename(f, dest=args.dest, move=args.move, width=args.width)
