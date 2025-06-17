@@ -19,7 +19,7 @@ def rename(filepath, dest=None, move=False, width=3):
     if move:
         shutil.move(old_path, new_path)
     else:
-        shutil.copy(old_path, new_path)
+        shutil.copyfile(old_path, new_path)
 
 
 regex_transaction = re.compile("<(?:[^:]+:)?transactionNumber>([^<]*)</")
